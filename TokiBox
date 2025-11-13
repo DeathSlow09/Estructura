@@ -3,8 +3,55 @@
 #include <ctime>
 #include <chrono>
 #include <cctype>
+#include <cmath>
+#include <iomanip>
+#include <string>
+#include <vector>
 
 using namespace std;
+using Clock = chrono::system_clock;
+
+
+struct drone
+{
+    int droneID;        
+    int id;             
+    double maxPayload;  
+    double cargaMax;    
+    double velocidad;   
+    double speed;       
+    bool state;         
+    bool disponible;    
+    char classd;
+    string modelname;
+};
+
+struct Package
+{
+    int ordernumber;              
+    int id;                        
+    double weight;                 
+    double peso;                   
+    string destination;
+    int xDestino = 0;             
+    int yDestino = 0;
+    string status;
+    string description;
+    Clock::time_point creationTime;
+    time_t horaSalida = 0;
+    time_t horaLlegada = 0;
+    bool entregado = false;
+    int dronAsignado = -1;
+};
+
+
+struct Node
+{
+    Package* PackageData;
+    Node* next;
+    Node* prev;
+};
+
 
 void AddnewDrone();
 void ManagePackages();
@@ -13,147 +60,396 @@ void PackageRegistry();
 void ExportRecords();
 void ImportRecords();
 void EndProgram();
-void deleteTop(NodePackages*& top);
-void CreatePackage(NodePackages*& top);
-void readPackage(NodePackages* top);
-void Liberar(NodePackages*& top);
+
+void CreatePackage(Node*& head, Node*& tail);
+void ModifyPackage(Node*& head, Node*& tail);
+void deletePackage(Node*& head, Node*& tail, int ordernum);
+void readPackages(Node* head);
+void LiberarPackages(Node*& head, Node*& tail);
+int GetPackageAgeInSeconds(const Package* pkg);
 
 
-struct drone
+string formatoTiempo(time_t t);
+double distanciaKm(int x, int y);
+string estadoPaquete(const Package& p);
+string horaLlegadaTexto(const Package& p, const vector<drone>& dronesVec, time_t ahora);
+void listadoDrones(const vector<drone>& dronesVec);
+void listadoPaquetes(const vector<Package>& paquetesVec);
+
+
+vector<drone> dronesVec;
+const int MAX_DRONES = 50;
+int nextDroneID = 1;
+
+Node* packagesHead = nullptr;
+Node* packagesTail = nullptr;
+vector<Package> paquetesVec; 
+int nextOrderNumber = 1;
+
+
+int main()
 {
-    int droneID;
-    double maxPayload;
-    bool state; // este lo puse por si esta en entrega (true) o disponible(false)
-    string classd; // chico mediano o grande 
-    string modelname;
-    double speed;
-};
-
-struct Package
-{
-    int ordernumber;
-    double weight;
-    string destination;
-    string status;
-    string description;
-};
-
-struct NodeDrones {
-    drone* droneData;
-    NodeDrones* next;
-    NodeDrones* prev;
-    }
-
-struct NodePackages
-{
-    Package* PackageData;
-    NodePackages* next;
-    NodePackages* prev;
-};
-
-void main()
-{
-    setlocale(LC_ALL,"es_:MX.UTF-8")
-       
-    NodePackages* top = nullptr;
-    NodeDrones* droneHead = nullptr;
-
-    
+    setlocale(LC_ALL, "es_MX.UTF-8");
     char opcion = '0';
 
     do
+    {
+        system("cls");
+        cout << "\n=== Menú de opciones ===\n";
+        cout << "1. Habilitar nuevo dron en la red \n";
+        cout << "2. Gestion de paquetes (Crear y administrar) \n";
+        cout << "3. Listado de drones\n";
+        cout << "4. Registro de paqueteria\n";
+        cout << "5. Exportar registros (CSV) \n";
+        cout << "6. Importar registros (CSV) \n";
+        cout << "E. Salir del programa \n";
+        cout << "\nEscriba el numero de la opción deseada o 'E' para salir: ";
+        
+        string line;
+        if (!getline(cin, line)) break;
+        size_t pos = line.find_first_not_of(" \t\r\n");
+        opcion = (pos == string::npos) ? '\0' : line[pos];
+        if (isalpha(static_cast<unsigned char>(opcion))) opcion = toupper(static_cast<unsigned char>(opcion));
+
+        switch (opcion)
         {
-                cout << "Menú de opciones:\n";
-                cout << "Seleccione una opción: ";
+            case '1': AddnewDrone(); break;
+            case '2': ManagePackages(); break;
+            case '3': listadoDrones(dronesVec); break;
+            case '4': listadoPaquetes(paquetesVec); break;
+            case '5': ExportRecords(); break;
+            case '6': ImportRecords(); break;
+            case 'E': EndProgram(); break;
+            default:
+                cout << "Opción inválida. Por favor, seleccione una opción del menú.\n";
+                system("pause");
+                break;
+        }
 
-                    cout << "1. Habilitar nuevo dron en la red \n";
-                    cout << "2. Gestion de paquetes (Crear y enviar) \n";
-                    cout << "3. Listado de drones\n";
-                    cout << "4. Gestión de drones (enviar y recibir)\n";
-                    cout << "5. Modificación de drones\n"; 
-                    cout << "6. Registro de paqueteria\n";
-                    cout << "7. Exportar registros (CSV) \n";
-                    cout << "8. Importar registros (Csv) \n";
-                    cout << "E. Salir del programa \n";
+    } while (opcion != 'E');
 
-                        cout << "Escriba el numero de la opción deseada o 'E' para salir: ";
-                             cin >> opcion;
-                        cin.ignore();
-                    
-                        if (opcion >= 'a' && opcion <= 'z')
-                            {
-                                opcion = toupper(opcion); 
-                            }
-                        
-                switch (opcion)
-                    {
-                        case '1':
-                            AddnewDrone();
-                            break;
-                        case '2':
-                            ManagePackages();
-                            break;
-                        case '3':
-                            ShowDrones();
-                            break;
-                        case '4':
-                            gestionDrone(droneHead);
-                            break;
-                        case '5':
-                           modifyDrone(droneHead);
-                           break;
-                        case '6':
-                            PackageRegistry();
-                            break;
-                        case '7':
-                            ExportRecords();
-                            break;
-                        case '8':
-                            ImportRecords();
-                            break;
-                        case 'E':
-                            EndProgram();
-                            break;
-                        default:
-                            cout << "Opción inválida. Por favor, seleccione una opción del menú.\n";
-                            break;
-                    }
-            
-            if(opcion < '1' || (opcion > '8' && opcion != 'E'))
-                {
-                    cout << "Opción no válida. Por favor, seleccione una opción del menú.\n";
-                }
-   
-        } while (opcion != 'E');
+    LiberarPackages(packagesHead, packagesTail);
+    return 0;
 }
 
 
-// Minifunciones de ayuda
+void AddnewDrone()
+{
+    system("cls");
+    if ((int)dronesVec.size() >= MAX_DRONES)
+    {
+        cout << "No existe espacio para dar de alta un nuevo dron (" << MAX_DRONES << ").\n";
+        system("pause");
+        return;
+    }
+
+    drone d;
+    d.droneID = nextDroneID++;
+    d.id = d.droneID;
+
+    cout << "\n=== Ingreso de un nuevo dron al sistema ===\n";
+    cout << "ID: " << d.droneID << "\n";
+    
+    cout << "Modelo: ";
+    getline(cin, d.modelname);
+
+    cout << "Carga maxima que puede sacar el dron (kg): ";
+    cin >> d.maxPayload;
+    cin.ignore();
+
+    d.cargaMax = d.maxPayload;
+
+    if (d.maxPayload >= 1 && d.maxPayload <= 5) d.classd = 'C';
+    else if (d.maxPayload >= 6 && d.maxPayload <= 15) d.classd = 'M';
+    else if (d.maxPayload >= 16) d.classd = 'G';
+    else
+    {
+        cout << "Carga del dron no válida.\n";
+        system("pause");
+        return;
+    }
+
+    
+    d.velocidad = 50.0;
+    d.speed = d.velocidad / 3.6;
+    d.state = false;
+    d.disponible = true;
+
+    dronesVec.push_back(d);
+
+    cout << "\nDron agregado exitosamente.\n";
+    system("pause");
+}
+
+
+void ManagePackages()
+{
+    system("cls");
+    cout << "\n=== Gestion de paquetes ===\n";
+    cout << "1. Crear nuevo paquete\n";
+    cout << "2. Modificar paquete (primeros 4 minutos)\n";
+    cout << "3. Eliminar paquete (primeros 4 minutos)\n";
+    cout << "4. Volver al menú principal\n";
+    cout << "Selecciona una opción: ";
+    
+    char opt;
+    if (!cin.get(opt)) return;
+    cin.ignore();
+
+    switch (opt)
+    {
+        case '1':
+            CreatePackage(packagesHead, packagesTail);
+            break;
+        case '2':
+            ModifyPackage(packagesHead, packagesTail);
+            break;
+        case '3':
+        {
+            cout << "Ingresa el número de orden a eliminar: ";
+            int ordernum; cin >> ordernum; cin.ignore();
+            deletePackage(packagesHead, packagesTail, ordernum);
+            break;
+        }
+        case '4':
+            return;
+        default:
+            cout << "Opción inválida.\n";
+            break;
+    }
+    system("pause");
+}
+
+
+int GetPackageAgeInSeconds(const Package* pkg)
+{
+    auto now = Clock::now();
+    auto duration = chrono::duration_cast<chrono::seconds>(now - pkg->creationTime);
+    return static_cast<int>(duration.count());
+}
+
+
+void CreatePackage(Node*& head, Node*& tail)
+{
+    Package* newPackage = new Package;
+    newPackage->ordernumber = nextOrderNumber++;
+    newPackage->id = newPackage->ordernumber;
+    newPackage->creationTime = Clock::now();
+    newPackage->horaSalida = 0;
+    newPackage->horaLlegada = 0;
+    newPackage->entregado = false;
+    newPackage->dronAsignado = -1;
+
+    cout << "\n=== Crear nuevo paquete ===\n";
+    cout << "Número de orden asignado automaticamente: " << newPackage->ordernumber << "\n";
+    
+    cout << "Peso del paquete (kg): ";
+    cin >> newPackage->weight; newPackage->peso = newPackage->weight;
+    cin.ignore();
+
+    cout << "Destino (texto): ";
+    getline(cin, newPackage->destination);
+
+    cout << "Descripción: ";
+    getline(cin, newPackage->description);
+
+    newPackage->status = "pendiente";
+
+    Node* newNode = new Node;
+    newNode->PackageData = newPackage;
+    newNode->next = nullptr;
+    newNode->prev = nullptr;
+
+    if (head == nullptr)
+    {
+        head = tail = newNode;
+    }
+    else
+    {
+        tail->next = newNode;
+        newNode->prev = tail;
+        tail = newNode;
+    }
+
+    
+    paquetesVec.push_back(*newPackage);
+
+    cout << "\nPaquete creado exitosamente.\n";
+}
+
+
+void ModifyPackage(Node*& head, Node*& tail)
+{
+    cout << "\n=== Modificar paquete ===\n";
+    cout << "Ingresa el número de orden a modificar: ";
+    int ordernum; cin >> ordernum; cin.ignore();
+
+    Node* current = head;
+    while (current != nullptr)
+    {
+        if (current->PackageData->ordernumber == ordernum)
+        {
+            int ageSeconds = GetPackageAgeInSeconds(current->PackageData);
+            if (ageSeconds > 240)
+            {
+                cout << "\nNo se puede modificar este paquete. Han pasado más de 4 minutos desde su creación.\n";
+                return;
+            }
+            if (ageSeconds > 120)
+            {
+                cout << "\nAdvertencia: Este paquete será enviado en los próximos 2 minutos.\n";
+            }
+
+            cout << "\nDatos actuales del paquete:\n";
+            cout << "Peso: " << current->PackageData->weight << " kg\n";
+            cout << "Destino: " << current->PackageData->destination << "\n";
+            cout << "Descripción: " << current->PackageData->description << "\n";
+            cout << "Estado: " << current->PackageData->status << "\n";
+
+            cout << "\n¿Qué deseas modificar?\n";
+            cout << "1. Peso\n2. Destino\n3. Descripción\n4. Estado\n5. Cancelar\nSelecciona: ";
+            char opt; if (!cin.get(opt)) return; cin.ignore();
+
+            switch (opt)
+            {
+                case '1':
+                    cout << "Nuevo peso (kg): ";
+                    cin >> current->PackageData->weight; current->PackageData->peso = current->PackageData->weight; cin.ignore();
+                    cout << "Peso actualizado.\n";
+                    break;
+                case '2':
+                    cout << "Nuevo destino: ";
+                    getline(cin, current->PackageData->destination);
+                    cout << "Destino actualizado.\n";
+                    break;
+                case '3':
+                    cout << "Nueva descripción: ";
+                    getline(cin, current->PackageData->description);
+                    cout << "Descripción actualizada.\n";
+                    break;
+                case '4':
+                    cout << "Nuevo estado: ";
+                    getline(cin, current->PackageData->status);
+                    current->PackageData->entregado = (current->PackageData->status == "entregado");
+                    cout << "Estado actualizado.\n";
+                    break;
+                case '5':
+                    cout << "Operación cancelada.\n";
+                    break;
+                default:
+                    cout << "Opción inválida.\n";
+                    break;
+            }
+
+            // actualizar vector espejo (buscar por id)
+            for (auto &p : paquetesVec)
+            {
+                if (p.id == current->PackageData->ordernumber)
+                {
+                    p = *current->PackageData;
+                    break;
+                }
+            }
+
+            return;
+        }
+        current = current->next;
+    }
+
+    cout << "Paquete con orden " << ordernum << " no encontrado.\n";
+}
+
+
+void deletePackage(Node*& head, Node*& tail, int ordernum)
+{
+    Node* current = head;
+    while (current != nullptr)
+    {
+        if (current->PackageData->ordernumber == ordernum)
+        {
+            int ageSeconds = GetPackageAgeInSeconds(current->PackageData);
+            if (ageSeconds > 240)
+            {
+                cout << "No se puede eliminar este paquete. Han pasado más de 4 minutos.\n";
+                return;
+            }
+            if (ageSeconds > 120)
+            {
+                cout << "Advertencia: Este paquete será enviado en los próximos 2 minutos.\n";
+            }
+
+            if (current->prev) current->prev->next = current->next; else head = current->next;
+            if (current->next) current->next->prev = current->prev; else tail = current->prev;
+
+            // borrar del vector espejo
+            for (auto it = paquetesVec.begin(); it != paquetesVec.end(); ++it)
+            {
+                if (it->id == ordernum) { paquetesVec.erase(it); break; }
+            }
+
+            delete current->PackageData;
+            delete current;
+
+            cout << "Paquete eliminado exitosamente.\n";
+            return;
+        }
+        current = current->next;
+    }
+    cout << "Paquete con orden " << ordernum << " no encontrado.\n";
+}
+
+
+void readPackages(Node* head)
+{
+   
+    listadoPaquetes(paquetesVec);
+}
+
+
+void LiberarPackages(Node*& head, Node*& tail)
+{
+    while (head)
+    {
+        Node* tmp = head;
+        head = head->next;
+        delete tmp->PackageData;
+        delete tmp;
+    }
+    tail = nullptr;
+    paquetesVec.clear();
+}
+
+
+void ExportRecords() { cout << "\nExportación no implementada aún.\n"; system("pause"); }
+void ImportRecords() { cout << "\nImportación no implementada aún.\n"; system("pause"); }
+void EndProgram() { cout << "\nSaliendo del programa...\n"; }
+
+
 
 string formatoTiempo(time_t t) {
     if (t <= 0) return "—";
     char buf[20];
-    strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&t)); // HH:MM:SS
+    strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&t));
     return string(buf);
 }
 
 double distanciaKm(int x, int y) {
-    return hypot(x, y);
+    return hypot((double)x, (double)y);
 }
 
-string estadoPaquete(const Paquete& p) {
+string estadoPaquete(const Package& p) {
     return p.entregado ? "Entregado" : "En proceso";
 }
 
-string horaLlegadaTexto(const Paquete& p, const vector<Dron>& drones, time_t ahora) {
+string horaLlegadaTexto(const Package& p, const vector<drone>& drones, time_t ahora) {
     if (p.entregado) return formatoTiempo(p.horaLlegada);
 
     if (p.dronAsignado >= 0 && p.dronAsignado < (int)drones.size()) {
-        const Dron& d = drones[p.dronAsignado];
-        if (d.velocidad > 0.0f && p.horaSalida > 0) {
+        const drone& d = drones[p.dronAsignado];
+        if (d.velocidad > 0.0 && p.horaSalida > 0) {
             const double distKm = distanciaKm(p.xDestino, p.yDestino);
-            const double travelSec = (distKm / d.velocidad) * 3600.0; // km / (km/h) -> h -> s
-            const time_t eta = static_cast<time_t>(p.horaSalida + (time_t)round(travelSec));
+            const double travelSec = (distKm / d.velocidad) * 3600.0;
+            const time_t eta = static_cast<time_t>(p.horaSalida + (time_t)llround(travelSec));
             return (ahora >= eta) ? formatoTiempo(eta) : "En proceso";
         } else {
             return "En proceso";
@@ -162,8 +458,7 @@ string horaLlegadaTexto(const Paquete& p, const vector<Dron>& drones, time_t aho
     return "sin dron asignado";
 }
 
-// Listados
-void listadoDrones() {
+void listadoDrones(const vector<drone>& drones) {
     cout << setfill('-') << setw(70) << "" << "\n";
     cout << left << setfill(' ')
          << "|" << setw(12) << "ID" << "|"
@@ -182,7 +477,7 @@ void listadoDrones() {
     cout << setfill('-') << setw(70) << "" << "\n\n";
 }
 
-void listadoPaquetes() {
+void listadoPaquetes(const vector<Package>& paquetes) {
     cout << setfill('-') << setw(120) << "" << "\n";
     cout << left << setfill(' ')
          << "|" << setw(10) << "ID"
@@ -194,13 +489,13 @@ void listadoPaquetes() {
          << "|" << setw(12) << "Hora Llegada" << "|\n";
     cout << setfill('-') << setw(120) << "" << "\n";
 
-    const time_t ahora = time(nullptr); // tiempo actual
+    const time_t ahora = time(nullptr);
 
     for (size_t i = 0; i < paquetes.size(); i++) {
-        const Paquete& p = paquetes[i];
+        const Package& p = paquetes[i];
         const string estado = estadoPaquete(p);
         const string horaSalidaStr = formatoTiempo(p.horaSalida);
-        const string horaLlegadaStr = horaLlegadaTexto(p, drones, ahora);
+        const string horaLlegadaStr = horaLlegadaTexto(p, dronesVec, ahora);
 
         cout << left << setfill(' ')
              << "|" << setw(10) << p.id
@@ -212,144 +507,4 @@ void listadoPaquetes() {
              << "|" << setw(12) << horaLlegadaStr << "|\n";
     }
     cout << setfill('-') << setw(120) << "" << "\n\n";
-}
-
-
-
-
-
-// BUSCAR DRON
-Node* findDrone(NodeDrones* head, int droneID) {
-    Node* temp = head;
-    while (temp) {
-        if (temp->droneData->droneID == droneID)
-            return temp;  // Retorna el nodo donde se encontró el dron
-        temp = temp->next;
-    }
-    return nullptr;  // Si no se encontró
-}
-
-// MODIFICAR DRON
-void modifyDrone(NodeDrones* head) {
-    int id;
-    cout << "Ingrese el ID del dron a modificar: ";
-    cin >> id; 
-    cin.ignore();
-
-    Node* node = findDrone(head, id);
-    if (!node) {
-        cout << "Dron no encontrado.\n";
-        return;
-    }
-
-    drone* d = node->droneData;
-
-    if (d->state) {
-        cout << "El dron está actualmente en entrega y no puede modificarse.\n";
-        return;
-    }
-
-    cout << "\nModificando dron ID " << d->droneID << endl;
-
-    cout << "Peso máximo actual: " << d->maxPayload << " kg\n";
-    cout << "Ingrese nuevo peso máximo: ";
-    cin >> d->maxPayload; 
-    cin.ignore();
-
-    cout << "Velocidad actual: " << d->speed << " m/s\n";
-    cout << "Ingrese nueva velocidad: ";
-    cin >> d->speed; 
-    cin.ignore();
-
-    cout << "\nDron actualizado correctamente.\n";
-}
-
-//GESTION DE DRONE (enviar o recibir) (extensión de modificar drone)
-void gestionDrone(NodeDrones* head) {
-    int id;
-    cout << "Ingrese el ID del dron: ";
-    cin >> id;
-    cin.ignore();
-
-    Node* node = findDrone(head, id);
-    if (!node) {
-        cout << "Dron no encontrado.\n";
-        return;
-    }
-
-    drone* d = node->droneData;
-
-    cout << "\n Información del dron:\n";
-    cout << "ID: " << d->droneID << "\n";
-    cout << "Modelo: " << d->modelname << "\n";
-    cout << "Clase: " << d->classd << "\n";
-    cout << "Peso máximo: " << d->maxPayload << " kg\n";
-    cout << "Velocidad: " << d->speed << " m/s\n";
-
-    if (d->state) {
-        cout << "\n Estado actual: EN OPERACIÓN\n";
-        cout << "¿Desea terminar la operación?\n";
-        cout << "1. Sí\n2. No\n> ";
-        int opcion;
-        cin >> opcion;
-        cin.ignore();
-
-        if (opcion == 1) {
-            d->state = false;
-            cout << "Operación finalizada. El dron ahora está disponible.\n";
-        } else {
-            cout << " No se realizaron cambios.\n";
-        }
-    } 
-    else {
-        cout << "\n Estado actual: DISPONIBLE\n";
-        cout << "¿Desea enviarlo a operación?\n";
-        cout << "1. Sí\n2. No\n> ";
-        int opcion;
-        cin >> opcion;
-        cin.ignore();
-
-        if (opcion == 1) {
-            d->state = true;
-            cout << " El dron ha sido enviado a operación.\n";
-        } else {
-            cout << " No se realizaron cambios.\n";
-        }
-    }
-}
-void deleteDrone(NodeDrones*& head) {
-    if(!head) {
-        cout << "No hay drones en la lista.\n";
-        return;
-    }
-
-    int TargetID;
-    cout << "Seleccione el ID del dron a eliminar:\n";
-    ShowDrones();
-    cin >> TargetID;
-    cin.ignore();
-
-    NodeDrones* current = findDrone(head, TargetID);
-    if(!current) {
-        cout << "No se encontró un dron con ese ID.\n";
-        return;
-    }
-
-    if(current->droneData->state) {
-        cout << "El dron está en operación y no se puede eliminar.\n";
-        return;
-    }
-
-    if(current->prev)
-        current->prev->next = current->next;
-    else
-        head = current->next;
-
-    if(current->next)
-        current->next->prev = current->prev;
-
-    delete current->droneData;
-    delete current;
-
-    cout << "Dron eliminado correctamente.\n\n";
 }
